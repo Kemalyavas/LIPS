@@ -77,7 +77,8 @@ export default function PostDetailPage() {
 
   useEffect(() => { fetchPost(); }, [id]);
 
-  async function updateStatus(status: string) {
+  async function updateStatus(status: string | null) {
+    if (!status) return;
     await fetch(`/api/posts/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     fetchPost();
   }
