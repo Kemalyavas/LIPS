@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  OWNER
+}
+
+enum PostStatus {
+  PENDING_REVIEW
+  SUITABLE
+  NOT_SUITABLE
+  DRAFT_GENERATED
+  IN_REVIEW
+  READY
+  COMMENTED
+  SKIPPED
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  hashedPassword String
+  role           UserRole  @default(ADMIN)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  sessions       Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id               String     @id @default(cuid())
+  linkedinUrl      String     @unique
+  postText         String     @db.Text
+  authorName       String
+  authorHeadline   String?
+  authorProfileUrl String?
+  authorAvatarUrl  String?
+  reactionsCount   Int        @default(0)
+  commentsCount    Int        @default(0)
+  datePosted       DateTime?
+  dateDiscovered   DateTime   @default(now())
+  status           PostStatus @default(PENDING_REVIEW)
+
+  aiCommentDraft   String?    @db.Text
+  danielsVersion   String?    @db.Text
+  improvementNotes String?    @db.Text
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  tags             PostTag[]
+  commentHistory   CommentHistory[]
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model CommentHistory {
+  id             String   @id @default(cuid())
+  postId         String
+  post           Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  aiDraft        String   @db.Text
+  danielsVersion String?  @db.Text
+  prompt         String?  @db.Text
+  createdAt      DateTime @default(now())
+}
+
+model StyleKnowledge {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  category  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
