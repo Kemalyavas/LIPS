@@ -100,7 +100,7 @@ export default function SearchPage() {
         <div className="flex items-end gap-3 mt-4">
           <div className="space-y-1.5">
             <Label className="text-xs text-zinc-500">Post Age</Label>
-            <Select value={datePosted} onValueChange={setDatePosted}>
+            <Select value={datePosted} onValueChange={(v) => v && setDatePosted(v)}>
               <SelectTrigger className="w-36 h-9 text-sm bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700">
                 <SelectValue />
               </SelectTrigger>

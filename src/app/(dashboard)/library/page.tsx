@@ -75,7 +75,7 @@ export default function LibraryPage() {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Post Library</h2>
           <p className="text-sm text-zinc-500 mt-0.5">{total} posts in your library</p>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
           <SelectTrigger className="w-40 h-9 text-sm bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
             <SelectValue placeholder="Filter" />
           </SelectTrigger>
