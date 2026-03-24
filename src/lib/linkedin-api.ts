@@ -10,20 +10,27 @@ export interface LinkedInPost {
   datePosted: string | null;
 }
 
-const ACTOR_ID = "apimaestro~linkedin-posts-search-scraper-no-cookies";
+const ACTOR_ID = "harvestapi~linkedin-post-search";
 const MAX_WAIT_SECS = 120;
 
-async function searchSingleKeyword(
+export async function searchLinkedInPosts(
   keyword: string,
-  sortBy: string,
-  datePosted: string,
-  token: string,
+  sortBy: string = "date_posted",
+  datePosted: string = ""
 ): Promise<LinkedInPost[]> {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) throw new Error("APIFY_TOKEN is not set");
+
+  // Split by comma, combine into searchQueries array
+  const keywords = keyword.split(",").map((k) => k.trim()).filter(Boolean);
+  if (keywords.length === 0) return [];
+
+  // Map date filter
   const dateMap: Record<string, string> = {
-    "past-24h": "Past 24 hours",
-    "past-week": "Past Week",
-    "past-month": "Past Month",
-    "past-3-months": "No filter",
+    "past-24h": "24h",
+    "past-week": "week",
+    "past-month": "month",
+    "past-3-months": "3months",
   };
 
   const response = await fetch(
@@ -32,11 +39,11 @@ async function searchSingleKeyword(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        searchKeyword: keyword.trim(),
-        sortType: sortBy === "date_posted" ? "Date posted" : "Relevance",
-        dateFilter: dateMap[datePosted] || "Past Month",
-        pageNumber: 1,
-        resultLimit: 25,
+        searchQueries: keywords,
+        maxPosts: 25,
+        scrapeComments: false,
+        scrapeReactions: false,
+        ...(dateMap[datePosted] ? { datePosted: dateMap[datePosted] } : {}),
       }),
       signal: AbortSignal.timeout(MAX_WAIT_SECS * 1000),
     }
@@ -48,70 +55,43 @@ async function searchSingleKeyword(
   }
 
   const items = await response.json();
+  if (!Array.isArray(items)) return [];
 
-  if (!Array.isArray(items)) {
-    return [];
+  // Deduplicate by URL
+  const seen = new Set<string>();
+  const posts: LinkedInPost[] = [];
+
+  for (const item of items) {
+    const url = item.linkedinUrl || item.shareUrl || "";
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+
+    const author = item.author || {};
+    const engagement = item.engagement || {};
+    const postedAt = item.postedAt || {};
+
+    posts.push({
+      linkedinUrl: url,
+      postText: item.content || "",
+      authorName: author.name || "Unknown",
+      authorHeadline: author.info || "",
+      authorProfileUrl: author.linkedinUrl || "",
+      authorAvatarUrl: author.avatar?.url || "",
+      reactionsCount: engagement.likes || 0,
+      commentsCount: engagement.comments || 0,
+      datePosted: postedAt.postedAgoText || postedAt.postedAgoShort || null,
+    });
   }
 
-  return items.map((item: Record<string, unknown>) => {
-    const author = (item.author || {}) as Record<string, unknown>;
-    const stats = (item.stats || {}) as Record<string, unknown>;
-    const postedAt = (item.posted_at || {}) as Record<string, unknown>;
+  // Relevance filter: post text must contain at least one word (4+ chars) from keywords
+  const allWords = keywords.flatMap((kw) =>
+    kw.toLowerCase().split(/\s+/).filter((w) => w.length > 3)
+  );
 
-    return {
-      linkedinUrl: (item.post_url || "") as string,
-      postText: (item.text || "") as string,
-      authorName: (author.name || "Unknown") as string,
-      authorHeadline: (author.headline || "") as string,
-      authorProfileUrl: (author.profile_url || "") as string,
-      authorAvatarUrl: (author.image_url || "") as string,
-      reactionsCount: Number(stats.total_reactions || 0),
-      commentsCount: Number(stats.comments || 0),
-      datePosted: (postedAt.display_text || postedAt.date || null) as string | null,
-    };
-  });
-}
+  if (allWords.length === 0) return posts;
 
-export async function searchLinkedInPosts(
-  keyword: string,
-  sortBy: string = "date_posted",
-  datePosted: string = ""
-): Promise<LinkedInPost[]> {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) throw new Error("APIFY_TOKEN is not set");
-
-  // Split by comma for multi-keyword search
-  const keywords = keyword.split(",").map((k) => k.trim()).filter(Boolean);
-
-  if (keywords.length === 0) return [];
-
-  // Search each keyword (in parallel if multiple)
-  let allPosts: LinkedInPost[];
-
-  if (keywords.length === 1) {
-    allPosts = await searchSingleKeyword(keywords[0], sortBy, datePosted, token);
-  } else {
-    const results = await Promise.all(
-      keywords.map((kw) => searchSingleKeyword(kw, sortBy, datePosted, token))
-    );
-    // Merge and deduplicate by URL
-    const seen = new Set<string>();
-    allPosts = [];
-    for (const posts of results) {
-      for (const post of posts) {
-        if (!seen.has(post.linkedinUrl)) {
-          seen.add(post.linkedinUrl);
-          allPosts.push(post);
-        }
-      }
-    }
-  }
-
-  // Relevance filter: post text must contain at least one keyword
-  const relevantPosts = allPosts.filter((post) => {
+  return posts.filter((post) => {
     const textLower = post.postText.toLowerCase();
-    return keywords.some((kw) => textLower.includes(kw.toLowerCase()));
+    return allWords.some((word) => textLower.includes(word));
   });
-
-  return relevantPosts;
 }
