@@ -64,8 +64,7 @@ export default function SearchPage() {
   function handleIrrelevant(post: SearchResult) {
     setAddedUrls((prev) => new Set(prev).add(post.linkedinUrl));
     setIrrelevantCount((c) => c + 1);
-    // Also save as SKIPPED so it doesn't appear again
-    handleAddToLibrary(post, "SKIPPED");
+    handleAddToLibrary(post, "IRRELEVANT");
   }
 
   function toggleExpand(url: string) {

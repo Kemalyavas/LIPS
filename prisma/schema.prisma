@@ -21,6 +21,7 @@ enum PostStatus {
   READY
   COMMENTED
   SKIPPED
+  IRRELEVANT
 }
 
 model User {

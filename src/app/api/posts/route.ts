@@ -20,8 +20,8 @@ export async function GET(req: NextRequest) {
     const statuses = status.split(",");
     where.status = { in: statuses };
   } else {
-    // Exclude SKIPPED by default
-    where.status = { not: "SKIPPED" };
+    // Exclude SKIPPED and IRRELEVANT by default
+    where.status = { notIn: ["SKIPPED", "IRRELEVANT"] };
   }
 
   if (tag) {
