@@ -99,6 +99,7 @@ ${DANIELS_STYLE_KB}
   } catch (error) {
     const message = error instanceof Error ? error.message : "Generation failed";
     console.error("Post engine error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message.includes("overloaded") || message.includes("Overloaded") || message.includes("529") ? 529 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

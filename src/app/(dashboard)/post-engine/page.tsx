@@ -15,10 +15,12 @@ export default function PostEnginePage() {
   const [voiceDraft, setVoiceDraft] = useState("");
   const [finalVersion, setFinalVersion] = useState("");
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleGenerate() {
     if (!topic.trim()) return;
     setGenerating(true);
+    setError("");
     setStructuredDraft("");
     setVoiceDraft("");
     setFinalVersion("");
@@ -33,7 +35,12 @@ export default function PostEnginePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || "Generation failed");
+        const msg = data.error || "Generation failed";
+        if (res.status === 529 || msg.includes("overloaded") || msg.includes("Overloaded")) {
+          setError("Claude API is temporarily overloaded. Please wait a moment and try again.");
+        } else {
+          setError(msg);
+        }
         return;
       }
 
@@ -41,7 +48,7 @@ export default function PostEnginePage() {
       setVoiceDraft(data.voiceDraft);
       setFinalVersion(data.voiceDraft);
     } catch {
-      alert("Something went wrong");
+      setError("Something went wrong. Please try again.");
     } finally {
       setGenerating(false);
     }
@@ -100,6 +107,12 @@ export default function PostEnginePage() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20 px-5 py-3">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Loading */}
       {generating && (

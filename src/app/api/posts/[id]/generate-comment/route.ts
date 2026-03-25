@@ -23,31 +23,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const pairs = learningPairs
     .filter((p): p is { aiDraft: string; danielsVersion: string } => p.danielsVersion !== null);
 
-  const { stream, getFullText } = await generateComment(
-    post.postText,
-    post.authorName,
-    DANIELS_STYLE_KB,
-    pairs,
-  );
+  try {
+    const { stream, getFullText } = await generateComment(
+      post.postText,
+      post.authorName,
+      DANIELS_STYLE_KB,
+      pairs,
+    );
 
-  // Save to DB after stream completes (background)
-  getFullText().then(async (text) => {
-    if (text) {
-      await prisma.post.update({
-        where: { id },
-        data: { aiCommentDraft: text, status: "DRAFT_GENERATED" },
-      });
-      await prisma.commentHistory.create({
-        data: { postId: id, aiDraft: text },
-      });
-    }
-  }).catch(console.error);
+    // Save to DB after stream completes (background)
+    getFullText().then(async (text) => {
+      if (text) {
+        await prisma.post.update({
+          where: { id },
+          data: { aiCommentDraft: text, status: "DRAFT_GENERATED" },
+        });
+        await prisma.commentHistory.create({
+          data: { postId: id, aiDraft: text },
+        });
+      }
+    }).catch(console.error);
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const status = message.includes("overloaded") || message.includes("Overloaded") || message.includes("529") ? 529 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
 }

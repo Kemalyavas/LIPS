@@ -62,6 +62,7 @@ export default function PostDetailPage() {
   const [improvementNotes, setImprovementNotes] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [genError, setGenError] = useState("");
 
   const id = params.id as string;
 
@@ -86,30 +87,46 @@ export default function PostDetailPage() {
   async function generateComment() {
     setGenerating(true);
     setStreamedText("");
-    const res = await fetch(`/api/posts/${id}/generate-comment`, { method: "POST" });
-    if (!res.ok || !res.body) { setGenerating(false); return; }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      for (const line of chunk.split("\n")) {
-        if (line.startsWith("data: ")) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.type === "content_block_delta" && data.delta?.text) {
-              fullText += data.delta.text;
-              setStreamedText(fullText);
-            }
-          } catch {}
+    setGenError("");
+    try {
+      const res = await fetch(`/api/posts/${id}/generate-comment`, { method: "POST" });
+      if (!res.ok) {
+        const text = await res.text();
+        if (res.status === 529 || text.includes("overloaded") || text.includes("Overloaded")) {
+          setGenError("Claude API is temporarily overloaded. Please wait a moment and try again.");
+        } else {
+          setGenError("Failed to generate comment. Please try again.");
+        }
+        setGenerating(false);
+        return;
+      }
+      if (!res.body) { setGenerating(false); return; }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "content_block_delta" && data.delta?.text) {
+                fullText += data.delta.text;
+                setStreamedText(fullText);
+              }
+            } catch {}
+          }
         }
       }
+      setDanielsVersion(fullText);
+      fetchPost();
+    } catch {
+      setGenError("Something went wrong. Please try again.");
+    } finally {
+      setGenerating(false);
     }
-    setGenerating(false);
-    setDanielsVersion(fullText);
-    fetchPost();
   }
 
   async function saveDanielsVersion() {
@@ -201,6 +218,11 @@ export default function PostDetailPage() {
             {generating ? "Generating..." : post.aiCommentDraft ? "Regenerate" : "Generate"}
           </Button>
         </div>
+        {genError && (
+          <div className="rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20 px-4 py-2.5 mb-3">
+            <p className="text-sm text-red-600 dark:text-red-400">{genError}</p>
+          </div>
+        )}
         {generating && streamedText ? (
           <div className="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 rounded-lg p-4">
             <p className="text-[13px] text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
